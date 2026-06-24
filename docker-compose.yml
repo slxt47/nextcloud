@@ -46,7 +46,7 @@ services:
       REDIS_HOST_PASSWORD: ${REDIS_PW}
       NEXTCLOUD_ADMIN_USER: admin
       NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
-      NEXTCLOUD_TRUSTED_DOMAINS: "localhost nc.slxt.dev cloud.slxt.org"
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost {custom_domains}"
       OVERWRITEPROTOCOL: https
       PHP_MEMORY_LIMIT: 2G
       PHP_UPLOAD_LIMIT: 10G
@@ -80,7 +80,7 @@ services:
       - "9980:9980"
     environment:
       # Beide Domains via regex - Punkte mit \\ escapen, | als OR
-      domain: "nc\\.slxt\\.dev|cloud\\.slxt\\.org"
+      domain: "{custom_domains}"
       username: admin
       password: ${COLLABORA_PW}
       extra_params: "--o:ssl.enable=false --o:ssl.termination=true"
@@ -99,7 +99,7 @@ services:
     environment:
       NEXTCLOUD_ADMIN_USER: admin
       NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
-      NEXTCLOUD_TRUSTED_DOMAINS: "localhost dev-nc.slxt.dev"
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost {custom_domains}"
       PHP_MEMORY_LIMIT: 2G
       PHP_UPLOAD_LIMIT: 10G
     volumes:
