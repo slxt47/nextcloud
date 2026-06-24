@@ -1,0 +1,115 @@
+services:
+  db:
+    image: mariadb:10.11
+    container_name: nextcloud-db
+    restart: unless-stopped
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    volumes:
+      - /root/nextcloud/db:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PW}
+      MYSQL_PASSWORD: ${DB_PW}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+    networks:
+      - nextcloud
+
+  redis:
+    image: redis:alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PW}
+    networks:
+      - nextcloud
+
+  app:
+    image: nextcloud-custom:29
+    build:
+      context: ./dockerfile
+      dockerfile: Dockerfile
+    container_name: nextcloud-app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - /root/nextcloud/html:/var/www/html
+      - /root/nextcloud/config:/var/www/html/config
+      - /root/nextcloud/custom_apps:/var/www/html/custom_apps
+      - /root/nextcloud/themes:/var/www/html/themes
+      - /data/nextcloud:/var/www/html/data
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${DB_PW}
+      REDIS_HOST: redis
+      REDIS_HOST_PASSWORD: ${REDIS_PW}
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost nc.slxt.dev cloud.slxt.org"
+      OVERWRITEPROTOCOL: https
+      PHP_MEMORY_LIMIT: 2G
+      PHP_UPLOAD_LIMIT: 10G
+    depends_on:
+      - db
+      - redis
+    networks:
+      - nextcloud
+
+  cron:
+    image: nextcloud-custom:29
+    container_name: nextcloud-cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - /root/nextcloud/html:/var/www/html
+      - /root/nextcloud/config:/var/www/html/config
+      - /root/nextcloud/custom_apps:/var/www/html/custom_apps
+      - /root/nextcloud/themes:/var/www/html/themes
+      - /data/nextcloud:/var/www/html/data
+    entrypoint: /cron.sh
+    networks:
+      - nextcloud
+
+  collabora:
+    image: collabora/code:latest
+    container_name: nextcloud-collabora
+    restart: unless-stopped
+    ports:
+      - "9980:9980"
+    environment:
+      # Beide Domains via regex - Punkte mit \\ escapen, | als OR
+      domain: "nc\\.slxt\\.dev|cloud\\.slxt\\.org"
+      username: admin
+      password: ${COLLABORA_PW}
+      extra_params: "--o:ssl.enable=false --o:ssl.termination=true"
+    cap_add:
+      - MKNOD
+    tty: true
+    networks:
+      - nextcloud
+
+  development:
+    image: nextcloud:latest
+    container_name: nextcloud-development
+    restart: unless-stopped
+    ports:
+      - "8181:80"
+    environment:
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost dev-nc.slxt.dev"
+      PHP_MEMORY_LIMIT: 2G
+      PHP_UPLOAD_LIMIT: 10G
+    volumes:
+      - nextcloud_dev:/var/www/html
+    networks:
+      - nextcloud
+
+volumes:
+  nextcloud_dev:
+    driver: local
+networks:
+  nextcloud:
+    driver: bridge
