@@ -1,51 +1,76 @@
 services:
   db:
-    image: mariadb:10.11
+    image: mariadb:10.11.19@sha256:0d0945c57f75b3a3b9ebe71aedaaad005fa5305054e8fca3d2e42a8c92b43b5e   # feste Version (= bisher 10.11)
     container_name: nextcloud-db
+    # Gehärtet am 28.10.2026: no-new-privileges + Healthcheck (Rechte bleiben – Init wechselt selbst auf Benutzer mysql)
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 --silent || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
     volumes:
       - /root/nextcloud/db:/var/lib/mysql
+    env_file: ./env/db.env
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PW}
-      MYSQL_PASSWORD: ${DB_PW}
       MYSQL_DATABASE: nextcloud
       MYSQL_USER: nextcloud
     networks:
       - nextcloud
 
   redis:
-    image: redis:alpine
+    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0   # feste Version (= bisher alpine)
     container_name: nextcloud-redis
+    # Gehärtet am 28.10.2026: no-new-privileges + Healthcheck (Passwort kommt aus env/redis.env)
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PW}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
+    env_file: ./env/redis.env
     networks:
       - nextcloud
 
   app:
-    image: nextcloud-custom:29
+    image: nextcloud-custom:33   # lokal gebaut aus ./dockerfile (Basis nextcloud:33)
     build:
       context: ./dockerfile
       dockerfile: Dockerfile
     container_name: nextcloud-app
+    # Gehärtet am 28.10.2026: no-new-privileges + Healthcheck (Apache wechselt selbst auf www-data)
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1/status.php | grep -q '\"installed\":true'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - /root/nextcloud/html:/var/www/html
       - /root/nextcloud/config:/var/www/html/config
       - /root/nextcloud/custom_apps:/var/www/html/custom_apps
       - /root/nextcloud/themes:/var/www/html/themes
-      - /data/nextcloud:/var/www/html/data
+      - /srv/nextcloud-data:/var/www/html/data
+    env_file: ./env/app.env
     environment:
       MYSQL_HOST: db
       MYSQL_DATABASE: nextcloud
       MYSQL_USER: nextcloud
-      MYSQL_PASSWORD: ${DB_PW}
       REDIS_HOST: redis
-      REDIS_HOST_PASSWORD: ${REDIS_PW}
       NEXTCLOUD_ADMIN_USER: admin
-      NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
       NEXTCLOUD_TRUSTED_DOMAINS: "localhost nc.slxt.dev cloud.slxt.org"
       OVERWRITEPROTOCOL: https
       PHP_MEMORY_LIMIT: 2G
@@ -57,8 +82,11 @@ services:
       - nextcloud
 
   cron:
-    image: nextcloud-custom:29
+    image: nextcloud-custom:33   # lokal gebaut aus ./dockerfile (Basis nextcloud:33)
     container_name: nextcloud-cron
+    # Gehärtet am 28.10.2026: no-new-privileges (crond startet die Jobs selbst als www-data)
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     depends_on:
       - app
@@ -67,23 +95,26 @@ services:
       - /root/nextcloud/config:/var/www/html/config
       - /root/nextcloud/custom_apps:/var/www/html/custom_apps
       - /root/nextcloud/themes:/var/www/html/themes
-      - /data/nextcloud:/var/www/html/data
+      - /srv/nextcloud-data:/var/www/html/data
     entrypoint: /cron.sh
     networks:
       - nextcloud
 
   collabora:
-    image: collabora/code:latest
+    image: collabora/code:latest@sha256:bb8f3c9c5c9016045f25fccb5f0649be94469ebc7c7cc379f3576e470cccf33d   # festgelegt per Digest (= 26.04.5.1)
     container_name: nextcloud-collabora
+    # 28.10.2026: nur Version festgelegt. KEIN no-new-privileges: coolforkit arbeitet mit Datei-Capabilities,
+    # die no-new-privileges abschalten würde. MKNOD bleibt (Jail-Kopiermodus). Healthcheck bringt das Image mit.
     restart: unless-stopped
     ports:
-      - "9980:9980"
+      - "127.0.0.1:9980:9980"
+    env_file: ./env/collabora.env
     environment:
       # Beide Domains via regex - Punkte mit \\ escapen, | als OR
       domain: "nc\\.slxt\\.dev|cloud\\.slxt\\.org"
       username: admin
-      password: ${COLLABORA_PW}
-      extra_params: "--o:ssl.enable=false --o:ssl.termination=true"
+      server_name: office.slxt.dev
+      extra_params: "--o:ssl.enable=false --o:ssl.termination=true --o:mount_jail_tree=false"
     cap_add:
       - MKNOD
     tty: true
@@ -91,14 +122,23 @@ services:
       - nextcloud
 
   development:
-    image: nextcloud:latest
+    image: nextcloud:33@sha256:ca04a99f5a081030dd6c494bdfbb1cbc2bf3e2e10c0f9fcdc3be031ac3803f77   # festgelegt per Digest (= 33.0.10)
     container_name: nextcloud-development
+    # Gehärtet am 28.10.2026: no-new-privileges + Healthcheck (Apache wechselt selbst auf www-data)
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1/status.php | grep -q '\"installed\":true'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
     ports:
-      - "8181:80"
+      - "127.0.0.1:8181:80"
+    env_file: ./env/development.env
     environment:
       NEXTCLOUD_ADMIN_USER: admin
-      NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PW}
       NEXTCLOUD_TRUSTED_DOMAINS: "localhost dev-nc.slxt.dev"
       PHP_MEMORY_LIMIT: 2G
       PHP_UPLOAD_LIMIT: 10G
