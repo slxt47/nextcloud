@@ -71,7 +71,7 @@ services:
       MYSQL_USER: nextcloud
       REDIS_HOST: redis
       NEXTCLOUD_ADMIN_USER: admin
-      NEXTCLOUD_TRUSTED_DOMAINS: "localhost nc.slxt.dev cloud.slxt.org"
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost {custom_domains}"
       OVERWRITEPROTOCOL: https
       PHP_MEMORY_LIMIT: 2G
       PHP_UPLOAD_LIMIT: 10G
@@ -111,9 +111,9 @@ services:
     env_file: ./env/collabora.env
     environment:
       # Beide Domains via regex - Punkte mit \\ escapen, | als OR
-      domain: "nc\\.slxt\\.dev|cloud\\.slxt\\.org"
+      domain: "{custom_domains}"
       username: admin
-      server_name: office.slxt.dev
+      server_name: "{office_domain}"   # öffentliche Adresse von Collabora
       extra_params: "--o:ssl.enable=false --o:ssl.termination=true --o:mount_jail_tree=false"
     cap_add:
       - MKNOD
@@ -139,7 +139,7 @@ services:
     env_file: ./env/development.env
     environment:
       NEXTCLOUD_ADMIN_USER: admin
-      NEXTCLOUD_TRUSTED_DOMAINS: "localhost dev-nc.slxt.dev"
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost {custom_domains}"
       PHP_MEMORY_LIMIT: 2G
       PHP_UPLOAD_LIMIT: 10G
     volumes:

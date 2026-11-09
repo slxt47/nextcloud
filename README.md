@@ -50,6 +50,10 @@ docker compose up -d --build
 
 Die echten `env/*.env` stehen in `.gitignore` und landen nie im Repo.
 
+In `docker-compose.yml` stehen Platzhalter statt echter Adressen: `{custom_domains}` (eigene Domains, bei
+Collabora als Regex mit `\\.` statt Punkt und `|` dazwischen) und `{office_domain}` (Adresse von Collabora).
+Vor dem Start ersetzen.
+
 Pfade auf dem Host: `/root/nextcloud/{html,config,custom_apps,themes,db}` und die Daten unter
 `/srv/nextcloud-data`. Anpassen, wenn dein Server anders aussieht.
 
