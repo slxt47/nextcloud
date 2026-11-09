@@ -1,4 +1,4 @@
-FROM nextcloud:29-apache
+FROM nextcloud:33-apache
 
 # Node.js (für Recognize) + Tools
 RUN apt-get update && \
